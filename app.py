@@ -7,6 +7,8 @@ Run:
     python app.py   ->  http://127.0.0.1:5000
 """
 import os
+from dotenv import load_dotenv
+load_dotenv(override=True)
 import mysql.connector
 from flask import Flask, render_template, request, redirect, url_for, flash
 
