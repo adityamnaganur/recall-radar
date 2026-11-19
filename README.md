@@ -46,7 +46,7 @@ This is a simplified model for learning and practice. It is not a scientifically
 ### 1. Clone the project
 
 ```
-git clone <your-repo-url>
+git clone https://github.com/adityamnaganur/recall-radar.git
 cd recall-radar
 ```
 
