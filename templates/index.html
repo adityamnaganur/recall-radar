@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recall Radar</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --text:#e8eaf0; --muted:#8b92a5; --accent:#6ea8fe; --bad:#ff6b6b; --warn:#ffc857; --ok:#4cd9a0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); padding:24px; max-width:1100px; margin-inline:auto; }
+  h1 { margin:0 0 4px; } .sub { color:var(--muted); margin-bottom:24px; }
+  .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom:24px; }
+  .card { background:var(--card); border-radius:12px; padding:16px; }
+  .card h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid #262a33; vertical-align:middle; }
+  .bar { height:8px; background:#262a33; border-radius:4px; overflow:hidden; min-width:80px; }
+  .bar > span { display:block; height:100%; }
+  input, select, button { background:#0f1115; color:var(--text); border:1px solid #2c313c; border-radius:6px; padding:6px 8px; font:inherit; }
+  button { cursor:pointer; background:var(--accent); color:#0b1220; border:0; font-weight:600; }
+  button.danger { background:var(--bad); }
+  form.inline { display:inline-flex; gap:4px; flex-wrap:wrap; }
+  .flash { background:#3a2a1a; padding:8px 12px; border-radius:8px; margin-bottom:16px; }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<h1>📡 Recall Radar</h1>
+<div class="sub">Track what you've learned. SQL estimates how much you've forgotten.</div>
+
+{% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
+
+<div class="grid">
+  <div class="card">
+    <h2>⚠ Fading now</h2>
+    {% if due %}<table>
+      {% for t in due %}<tr><td>{{ t.name }}</td><td class="muted">{{ t.category }}</td><td><b style="color:var(--bad)">{{ t.retention }}%</b></td></tr>{% endfor %}
+    </table>{% else %}<span class="muted">Nothing below 60%. Nice.</span>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Category health</h2>
+    <table>
+      <tr class="muted"><th>Category</th><th>Topics</th><th>Avg</th><th>Fading</th></tr>
+      {% for c in categories %}<tr><td>{{ c.category }}</td><td>{{ c.topics }}</td><td>{{ c.avg_retention }}%</td><td>{{ c.fading|int }}</td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <h2>Last 7 days</h2>
+    {% if streak %}<table>
+      {% for s in streak %}<tr><td>{{ s.day }}</td><td>{{ s.reviews }} reviews</td><td class="muted">avg conf {{ s.avg_conf }}</td></tr>{% endfor %}
+    </table>{% else %}<span class="muted">No reviews yet this week.</span>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Confidence movement</h2>
+    {% if trend %}<table>
+      {% for t in trend %}<tr><td>{{ t.name }}</td><td>{{ t.first_conf }} → {{ t.latest_conf }}</td></tr>{% endfor %}
+    </table>{% else %}<span class="muted">Needs 2+ reviews with different scores.</span>{% endif %}
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <h2>Add topic</h2>
+  <form class="inline" method="post" action="{{ url_for('create_topic') }}">
+    <input name="name" placeholder="e.g. Dijkstra's algorithm" required>
+    <input name="category" placeholder="Category (DSA, SQL...)">
+    <select name="difficulty" title="Difficulty">{% for d in range(1,6) %}<option value="{{ d }}" {{ 'selected' if d==3 }}>Difficulty {{ d }}</option>{% endfor %}</select>
+    <button>Add</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>All topics (weakest memory first)</h2>
+  <table>
+    <tr class="muted"><th>Topic</th><th>Retention</th><th>Reviews</th><th>Last touch</th><th>Log review</th><th>Edit / delete</th></tr>
+    {% for t in topics %}
+    {% set color = 'var(--bad)' if t.retention < 40 else ('var(--warn)' if t.retention < 70 else 'var(--ok)') %}
+    <tr>
+      <td>{{ t.name }}<br><span class="muted">{{ t.category }} · diff {{ t.difficulty }}</span></td>
+      <td><div class="bar"><span style="width:{{ t.retention }}%;background:{{ color }}"></span></div>{{ t.retention }}%</td>
+      <td>{{ t.review_count }}</td>
+      <td class="muted">{{ t.days_since }}d ago</td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('add_review', topic_id=t.id) }}">
+          <select name="confidence">{% for c in range(1,6) %}<option value="{{ c }}" {{ 'selected' if c==3 }}>{{ c }}</option>{% endfor %}</select>
+          <input name="notes" placeholder="note" size="8">
+          <button>Review</button>
+        </form>
+      </td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('update_topic', topic_id=t.id) }}">
+          <input name="name" value="{{ t.name }}" size="12">
+          <input name="category" value="{{ t.category }}" size="7">
+          <select name="difficulty">{% for d in range(1,6) %}<option value="{{ d }}" {{ 'selected' if d==t.difficulty }}>{{ d }}</option>{% endfor %}</select>
+          <button>Save</button>
+        </form>
+        <form class="inline" method="post" action="{{ url_for('delete_topic', topic_id=t.id) }}" onsubmit="return confirm('Delete this topic and its reviews?')">
+          <button class="danger">✕</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="muted">No topics yet. Add one above.</td></tr>{% endfor %}
+  </table>
+</div>
+</body>
+</html>
